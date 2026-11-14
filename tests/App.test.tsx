@@ -100,6 +100,32 @@ describe("App", () => {
     expect(AppStore.loaded).toBe(LoadState.LOADED)
   })
 
+  it("shows a login hint and stops loading when Reddit returns a 403", async () => {
+    fetchPostsMock.mockRejectedValue(new Error("Reddit request failed: 403"))
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    render(<App />)
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /Reddit refused the request \(403\).*not logged in to reddit\.com/i,
+    )
+    expect(AppStore.loaded).toBe(LoadState.LOADED)
+    expect(CacheStore.lastUpdated).toBe(-1)
+    errorSpy.mockRestore()
+  })
+
+  it("shows a generic error for non-auth failures", async () => {
+    fetchPostsMock.mockRejectedValue(new Error("NetworkError"))
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    render(<App />)
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn't load wallpapers from Reddit: NetworkError",
+    )
+    errorSpy.mockRestore()
+  })
+
   it("switches pinned rerolls to loading without fetching", async () => {
     ConfigStore.pinned = true
     HistoryStore.history = [makeImageData({ url: "https://i.redd.it/pinned.jpg" })]

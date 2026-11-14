@@ -5,11 +5,11 @@ import { makeListing } from "../helpers"
 describe("fetchPosts", () => {
   it("builds the query, paginates, and filters image posts", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ json: async () => makeListing([
+      .mockResolvedValueOnce({ ok: true, json: async () => makeListing([
         { url: "https://i.redd.it/1.jpg", thumbnail: "default" },
         { url: "https://example.com/skip.jpg", thumbnail: "default" },
       ], "after-1") })
-      .mockResolvedValueOnce({ json: async () => makeListing([
+      .mockResolvedValueOnce({ ok: true, json: async () => makeListing([
         { url: "https://i.redd.it/2.jpg", thumbnail: "default" },
       ], null) })
 
@@ -39,6 +39,7 @@ describe("fetchPosts", () => {
 
   it("filters to nsfw i.redd.it posts when nsfw is enabled", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
       json: async () => makeListing([
         { url: "https://i.redd.it/nsfw.jpg", thumbnail: "nsfw" },
         { url: "https://i.redd.it/sfw.jpg", thumbnail: "default" },
@@ -60,5 +61,46 @@ describe("fetchPosts", () => {
     expect(posts).toEqual([
       { url: "https://i.redd.it/nsfw.jpg", thumbnail: "nsfw" },
     ])
+  })
+
+  it("sends the user's Reddit session cookies with the request", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => makeListing([], null),
+    })
+
+    vi.stubGlobal("fetch", fetchMock)
+
+    await fetchPosts({
+      q: 'flair:"Desktop"',
+      sort: "top",
+      t: "year",
+      nsfw: false,
+    } as never)
+
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ credentials: "include" }),
+    )
+  })
+
+  it("throws an error containing the status code when Reddit refuses the request", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      json: async () => {
+        throw new Error("not json")
+      },
+    })
+
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(
+      fetchPosts({
+        q: 'flair:"Desktop"',
+        sort: "top",
+        t: "year",
+        nsfw: false,
+      } as never),
+    ).rejects.toThrow("Reddit request failed: 403")
   })
 })

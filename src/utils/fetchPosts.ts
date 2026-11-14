@@ -25,7 +25,9 @@ export async function fetchPosts(config: ConfigState) {
 
     const res = await fetch(
       `https://www.reddit.com/r/Animewallpaper/search.json?${query}`,
+      { credentials: "include" },
     )
+    if (!res.ok) throw new Error(`Reddit request failed: ${res.status}`)
     const json = (await res.json()) as RedditSearchResponse
 
     posts = posts.concat(json.data.children.map((child) => child.data))

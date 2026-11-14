@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { FaHeart, FaReddit, FaSadTear, FaSync } from "react-icons/fa"
 import { PuffLoader } from "react-spinners"
 
@@ -31,6 +31,7 @@ function App() {
   const config = useSnapshot(ConfigStore)
   const cache = useSnapshot(CacheStore)
   const { history, i } = useSnapshot(HistoryStore)
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
   // const [modalOpen, setModalOpen] = useState(false)
 
@@ -63,20 +64,30 @@ function App() {
       let posts: RedditPost[] = []
 
       // Cache for 24 hours
-      if (
-        cache.lastUpdated === -1 ||
-        Date.now() - cache.lastUpdated >= 1000 * 60 * 60 * 24
-      ) {
-        console.log("[i] Fetching w/ config:", config)
-        posts = await fetchPosts(config)
+      try {
+        if (
+          cache.lastUpdated === -1 ||
+          Date.now() - cache.lastUpdated >= 1000 * 60 * 60 * 24
+        ) {
+          console.log("[i] Fetching w/ config:", config)
+          posts = await fetchPosts(config)
 
-        if (!ignore) {
-          CacheStore.lastUpdated = Date.now()
-          CacheStore.data = posts
+          if (!ignore) {
+            CacheStore.lastUpdated = Date.now()
+            CacheStore.data = posts
+          }
+        } else {
+          console.log("[i] Using cached posts")
+          posts = cache.data as RedditPost[]
         }
-      } else {
-        console.log("[i] Using cached posts")
-        posts = cache.data as RedditPost[]
+        if (!ignore) setFetchError(null)
+      } catch (e) {
+        console.error("[!] Failed to fetch posts:", e)
+        if (!ignore) {
+          setFetchError(e instanceof Error ? e.message : String(e))
+          setLoaded(LoadState.LOADED)
+        }
+        return
       }
 
       if (!posts.length || ignore) {
@@ -124,6 +135,30 @@ function App() {
         }
       >
         <div className="content">
+          {fetchError && (
+            <div
+              role="alert"
+              style={{
+                position: "absolute",
+                top: "1rem",
+                left: "50%",
+                transform: "translateX(-50%)",
+                zIndex: 5,
+                maxWidth: "80%",
+                padding: "10px 16px",
+                borderRadius: "12px",
+                background: "rgba(0,0,0,.7)",
+                color: "#fff",
+                fontSize: ".85rem",
+                textAlign: "center",
+                lineHeight: 1.4,
+              }}
+            >
+              {/\b(401|403)\b/.test(fetchError)
+                ? `Reddit refused the request (${fetchError.match(/\b(401|403)\b/)![1]}). This usually means you are not logged in to reddit.com in this Firefox profile. Log in, then open a new tab.`
+                : `Couldn't load wallpapers from Reddit: ${fetchError}`}
+            </div>
+          )}
           <header>
             <div className="header-left">
               <TimeDate />
